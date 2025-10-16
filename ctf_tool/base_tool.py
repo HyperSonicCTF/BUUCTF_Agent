@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 工具基类
+# Base class for all tools
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple
 
@@ -7,11 +7,11 @@ from typing import Dict, Tuple
 class BaseTool(ABC):
     @abstractmethod
     def execute(self, *args, **kwargs) -> Tuple[str, str]:
-        """执行工具操作"""
+        """Run the tool and return stdout/stderr."""
         pass
 
     @property
     @abstractmethod
     def function_config(self) -> Dict:
-        """返回工具的函数调用配置"""
+        """Return the function-call configuration exposed to the agent."""
         pass

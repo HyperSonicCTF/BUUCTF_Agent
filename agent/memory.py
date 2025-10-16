@@ -12,93 +12,95 @@ class Memory:
         self, config: dict, max_steps: int = 15, compression_threshold: int = 7
     ):
         """
-        记忆管理类
-        :param config: 配置字典
-        :param max_steps: 最大保存步骤数
-        :param compression_threshold: 触发压缩的步骤阈值
+        Memory management helper.
+        :param config: Configuration dictionary.
+        :param max_steps: Maximum number of detailed steps to retain.
+        :param compression_threshold: Number of steps before triggering compression.
         """
         self.config = config
         self.llm_config = self.config["llm"]["solve_agent"]
         self.max_steps = max_steps
         self.compression_threshold = compression_threshold
-        self.history: List[Dict] = []  # 详细历史记录
-        self.compressed_memory: List[Dict] = []  # 压缩后的记忆块
-        self.key_facts: Dict[str, str] = {}  # 关键事实存储（结构化）
-        self.failed_attempts: Dict[str, int] = {}  # 记录失败尝试
+        self.history: List[Dict] = []  # Full history of recent steps
+        self.compressed_memory: List[Dict] = []  # Compressed memory blocks
+        self.key_facts: Dict[str, str] = {}  # Structured key facts
+        self.failed_attempts: Dict[str, int] = {}  # Failed attempt counters
 
     def add_step(self, step: Dict) -> None:
-        """添加新的步骤到历史记录，并提取关键信息"""
+        """Add a new step to the history and extract key information."""
         self.history.append(step)
 
-        # 提取关键事实（命令、输出、分析）
+        # Extract key facts (command, output, analysis)
         self._extract_key_facts(step)
 
-        # 记录失败尝试
+        # Track failed attempts
         if "analysis" in step and "success" in step["analysis"]:
             if not step["analysis"]["success"]:
                 command = step.get("content", "")
                 self.failed_attempts[command] = self.failed_attempts.get(command, 0) + 1
 
-        # 检查是否需要压缩记忆
+        # Compress the memory when needed
         if len(self.history) >= self.compression_threshold:
             self.compress_memory()
 
     def _extract_key_facts(self, step: Dict) -> None:
-        """从步骤中提取关键事实并存储"""
-        # 提取关键命令和结果
+        """Pull key facts from a step and cache them."""
+        # Capture the command and a truncated result
         if "content" in step and "output" in step:
             command = step["content"]
             output_summary = step["output"][:256] + (
                 "..." if len(step["output"]) > 256 else ""
             )
-            self.key_facts[f"command"] = f"命令：{command},结果: {output_summary}"
+            self.key_facts["command"] = f"Command: {command}, Result: {output_summary}"
 
-        # 提取分析结论
+        # Capture analysis conclusions
         if "analysis" in step and "analysis" in step["analysis"]:
             analysis = step["analysis"]["analysis"]
-            if "关键发现" in analysis:
+            if isinstance(analysis, str) and any(
+                keyword in analysis.lower() for keyword in ("key finding", "key findings")
+            ):
                 self.key_facts[f"finding:{hash(analysis)}"] = analysis
 
     def compress_memory(self) -> None:
-        """压缩历史记录，生成结构化记忆块"""
-        logger.info("优化记忆压缩中...")
+        """Compress the history into structured memory blocks."""
+        logger.info("Compacting memory...")
         if not self.history:
             return
 
-        # 构建更精细的压缩提示
-        prompt = """
-                "你是一个专业的CTF解题助手，需要压缩解题历史记录。请执行以下任务：\n"
-                "1. 识别并提取关键的技术细节和发现\n"
-                "2. 标记已尝试但失败的解决方案\n"
-                "3. 总结当前解题状态和下一步建议\n"
-                "4. 以JSON格式返回以下结构的数据：\n"
-                "{\n"
-                '  "key_findings": ["发现1", "发现2"],\n'
-                '  "failed_attempts": ["命令1", "命令2"],\n'
-                '  "current_status": "当前状态描述",\n'
-                    '  "next_steps": ["建议1", "建议2"]\n'
-                    "}\n\n"
-                "历史记录:\n"
-                """
+        # Build a detailed compression prompt
+        prompt = (
+            "You are a CTF solving assistant. Compress the solving history by completing these tasks:\n"
+            "1. Identify key technical findings and discoveries.\n"
+            "2. Record solutions that were attempted but failed.\n"
+            "3. Summarise the current progress and suggest next steps.\n"
+            "4. Return a JSON object with the structure:\n"
+            "{\n"
+            '  "key_findings": ["Finding 1", "Finding 2"],\n'
+            '  "failed_attempts": ["Command 1", "Command 2"],\n'
+            '  "current_status": "Status description",\n'
+            '  "next_steps": ["Suggestion 1", "Suggestion 2"]\n'
+            "}\n\n"
+            "History:\n"
+        )
 
-        # 添加关键事实作为上下文
-        prompt += "关键事实摘要:\n"
-        for _, value in list(self.key_facts.items())[-5:]:  # 只取最近5个关键事实
+        # Add key facts as context
+        prompt += "Key facts summary:\n"
+        for _, value in list(self.key_facts.items())[-5:]:  # Only keep the latest 5
             prompt += f"- {value}\n"
 
-        # 添加历史步骤
+        # Include historical steps
         for i, step in enumerate(self.history[-self.compression_threshold :]):
-            prompt += f"\n步骤 {i+1}:\n"
-            prompt += f"- 目的: {step.get('purpose', '未指定')}\n"
-            prompt += f"- 命令: {step['content']}\n"
+            prompt += f"\nStep {i+1}:\n"
+            prompt += f"- Purpose: {step.get('purpose', 'unspecified')}\n"
+            prompt += f"- Command: {step['content']}\n"
 
-            # 添加分析结果（如果有）
+            # Append analysis if present
             if "analysis" in step:
-                analysis = step["analysis"].get("analysis", "无分析")
-                prompt += f"- 分析: {analysis}\n"
+                analysis = step["analysis"].get("analysis", "No analysis")
+                prompt += f"- Analysis: {analysis}\n"
 
         try:
-            # 调用LLM生成结构化记忆
+            # Call the LLM to produce structured memory
             litellm.enable_json_schema_validation = True
             response = litellm.completion(
                 model=self.llm_config["model"],
@@ -108,103 +110,103 @@ class Memory:
                 max_tokens=1024,
             )
 
-            # 解析并存储压缩记忆
+            # Parse and store the compressed memory block
             json_str = response.choices[0].message.content.strip()
             compressed_data = json.loads(json_str)
 
-            # 更新失败尝试记录
+            # Update failed attempt counters
             for attempt in compressed_data.get("failed_attempts", []):
                 self.failed_attempts[attempt] = self.failed_attempts.get(attempt, 0) + 1
 
-            # 添加时间戳和来源信息
+            # Annotate with provenance metadata
             compressed_data["source_steps"] = len(self.history)
 
             self.compressed_memory.append(compressed_data)
             print(
-                f"记忆压缩成功: 添加了{len(compressed_data['key_findings'])}个关键发现"
+                f"Memory compression succeeded: captured {len(compressed_data['key_findings'])} key findings."
             )
 
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"记忆压缩解析失败: {str(e)}")
-            # 回退到文本摘要
+            print(f"Unable to parse compressed memory: {str(e)}")
+            # Fall back to storing the raw summary
             fallback = (
                 response.choices[0].message.content.strip()
                 if "response" in locals()
-                else "压缩失败"
+                else "Compression failed"
             )
             self.compressed_memory.append(
                 {"fallback_summary": fallback, "source_steps": len(self.history)}
             )
         except Exception as e:
-            print(f"记忆压缩失败: {str(e)}")
+            print(f"Memory compression failed: {str(e)}")
             self.compressed_memory.append(
-                {"error": f"压缩失败: {str(e)}", "source_steps": len(self.history)}
+                {"error": f"Compression failed: {str(e)}", "source_steps": len(self.history)}
             )
 
-        # 清空历史记录，但保留最后几步上下文
+        # Retain the last few detailed steps for context
         keep_last = min(4, len(self.history))
         self.history = self.history[-keep_last:]
 
     def get_summary(self, include_key_facts: bool = True) -> str:
-        """获取综合记忆摘要"""
+        """Return a consolidated memory summary."""
         summary = ""
 
-        # 1. 关键事实摘要
+        # 1. Key fact summary
         if include_key_facts and self.key_facts:
-            summary += "关键事实:\n"
-            for _, value in list(self.key_facts.items())[-10:]:  # 显示最近10个关键事实
+            summary += "Key facts:\n"
+            for _, value in list(self.key_facts.items())[-10:]:  # Show up to 10 of the latest facts
                 summary += f"- {value}\n"
             summary += "\n"
 
-        # 2. 压缩记忆摘要
+        # 2. Compressed memory blocks
         if self.compressed_memory:
-            summary += "压缩记忆块:\n"
-            for i, mem in enumerate(self.compressed_memory[-3:]):  # 显示最近3个压缩块
-                summary += f"记忆块 #{len(self.compressed_memory)-i}:\n"
+            summary += "Compressed memory blocks:\n"
+            for i, mem in enumerate(self.compressed_memory[-3:]):  # Show the latest three blocks
+                summary += f"Block #{len(self.compressed_memory)-i}:\n"
 
                 if "key_findings" in mem:
-                    summary += f"- 状态: {mem.get('current_status', '未知')}\n"
-                    summary += f"- 关键发现: {', '.join(mem['key_findings'][:3])}"
+                    summary += f"- Status: {mem.get('current_status', 'unknown')}\n"
+                    summary += f"- Key findings: {', '.join(mem['key_findings'][:3])}"
                     if len(mem["key_findings"]) > 3:
-                        summary += f" 等{len(mem['key_findings'])}项"
+                        summary += f" and {len(mem['key_findings']) - 3} more"
                     summary += "\n"
 
                 if "failed_attempts" in mem:
-                    summary += f"- 失败尝试: {', '.join(mem['failed_attempts'][:3])}"
+                    summary += f"- Failed attempts: {', '.join(mem['failed_attempts'][:3])}"
                     if len(mem["failed_attempts"]) > 3:
-                        summary += f" 等{len(mem['failed_attempts'])}项"
+                        summary += f" and {len(mem['failed_attempts']) - 3} more"
                     summary += "\n"
 
                 if "next_steps" in mem:
-                    summary += f"- 建议步骤: {mem['next_steps'][0]}\n"
+                    summary += f"- Suggested next step: {mem['next_steps'][0]}\n"
 
-                summary += f"- 来源: 基于{mem['source_steps']}个历史步骤\n\n"
+                summary += f"- Source: based on {mem['source_steps']} historical steps\n\n"
 
-        # 3. 最近详细步骤
+        # 3. Recent detailed steps
         if self.history:
-            summary += "最近详细步骤:\n"
+            summary += "Recent detailed steps:\n"
             for i, step in enumerate(self.history):
                 step_num = len(self.history) - i
-                summary += f"步骤 {step_num}:\n"
-                summary += f"- 目的: {step.get('purpose', '未指定')}\n"
-                summary += f"- 命令: {step['content']}\n"
+                summary += f"Step {step_num}:\n"
+                summary += f"- Purpose: {step.get('purpose', 'unspecified')}\n"
+                summary += f"- Command: {step['content']}\n"
 
-                # 显示输出摘要和分析
+                # Include output and analysis excerpts
                 if "output" in step:
                     output = step["output"]
                     summary += (
-                        f"- 输出: {output[:512]}{'...' if len(output) > 512 else ''}\n"
+                        f"- Output: {output[:512]}{'...' if len(output) > 512 else ''}\n"
                     )
 
                 if "analysis" in step:
-                    analysis = step["analysis"].get("analysis", "无分析")
-                    summary += f"- 分析: {analysis}\n"
+                    analysis = step["analysis"].get("analysis", "No analysis")
+                    summary += f"- Analysis: {analysis}\n"
 
-                # 显示失败次数
+                # Show failure counts
                 if "content" in step and step["content"] in self.failed_attempts:
                     summary += (
-                        f"- 历史失败次数: {self.failed_attempts[step['content']]}\n"
+                        f"- Historical failure count: {self.failed_attempts[step['content']]}\n"
                     )
 
                 summary += "\n"
-        return summary if summary else "无历史记录"
+        return summary if summary else "No history"

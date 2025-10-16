@@ -26,53 +26,53 @@ class SolveAgent:
         self.problem = problem
         self.prompt: dict = yaml.safe_load(open("./prompt.yaml", "r", encoding="utf-8"))
         if self.config is None:
-            raise ValueError("找不到配置文件")
+            raise ValueError("Configuration file not found")
 
-        # 初始化Jinja2模板环境
+        # Initialise the Jinja2 template environment
         self.env = Environment(loader=FileSystemLoader("."))
 
-        # 初始化记忆系统
+        # Initialise the memory system
         self.memory = Memory(
             config=self.config,
             max_steps=self.config.get("max_history_steps", 10),
             compression_threshold=self.config.get("compression_threshold", 5),
         )
 
-        # 动态加载工具
-        self.tools: Dict[str, BaseTool] = {}  # 工具名称 -> 工具实例
-        self.function_configs: List[Dict] = []  # 函数调用配置列表
+        # Dynamically loaded tools
+        self.tools: Dict[str, BaseTool] = {}  # Tool name -> tool instance
+        self.function_configs: List[Dict] = []  # Function-call configurations
         self.analyzer = Analyzer(config=self.config, problem=self.problem)
 
-        # 加载ctf_tools文件夹中的所有工具
+        # Load all tools from the ctf_tool package
         self._load_tools()
 
-        # 添加模式设置
+        # Let the user choose the operating mode
         self._select_mode()
 
-        # 添加flag确认回调函数
-        self.confirm_flag_callback = None  # 将由Workflow设置
+        # Workflow will inject the flag confirmation callback
+        self.confirm_flag_callback = None
 
     def _select_mode(self):
-        """让用户选择运行模式"""
-        print("\n请选择运行模式:")
-        print("1. 自动模式（Agent自动生成和执行所有命令）")
-        print("2. 手动模式（每一步需要用户批准）")
+        """Prompt the user to choose between automatic and manual modes."""
+        print("\nSelect a run mode:")
+        print("1. Automatic mode (the agent generates and executes every command)")
+        print("2. Manual mode (each step requires approval)")
 
         while True:
-            choice = input("请输入选项编号: ").strip()
+            choice = input("Enter the option number: ").strip()
             if choice == "1":
                 self.auto_mode = True
-                logger.info("已选择自动模式")
+                logger.info("Automatic mode selected.")
                 return
             elif choice == "2":
                 self.auto_mode = False
-                logger.info("已选择手动模式")
+                logger.info("Manual mode selected.")
                 return
             else:
-                print("无效选项，请重新选择")
+                print("Invalid option, please try again.")
 
     def _load_tools(self):
-        """动态加载tool文件夹中的所有工具"""
+        """Dynamically import every tool module."""
         tools_dir = os.path.join(os.path.dirname(__file__), "..", "ctf_tool")
 
         for file_name in os.listdir(tools_dir):
@@ -81,79 +81,77 @@ class SolveAgent:
                 and file_name != "__init__.py"
                 and file_name != "base_tool.py"
             ):
-                module_name = file_name[:-3]  # 移除.py
+                module_name = file_name[:-3]  # Strip the .py suffix
                 try:
-                    # 导入模块
+                    # Import the module
                     module = importlib.import_module(f"ctf_tool.{module_name}")
 
-                    # 查找所有继承自BaseTool的类
+                    # Find every class inheriting from BaseTool
                     for name, obj in inspect.getmembers(module):
                         if (
                             inspect.isclass(obj)
                             and issubclass(obj, BaseTool)
                             and obj != BaseTool
                         ):
-                            # 检查是否需要特殊配置
+                            # Instantiate with custom config when provided
                             if name in self.config.get("tool_config", {}):
-                                # 使用配置创建实例
                                 tool_config = self.config["tool_config"][name]
                                 tool_instance = obj(tool_config)
                             else:
-                                # 创建默认实例
                                 tool_instance = obj()
 
-                            # 添加到工具字典
+                            # Register the tool
                             tool_name = tool_instance.function_config["function"][
                                 "name"
                             ]
                             self.tools[tool_name] = tool_instance
 
-                            # 添加工具配置
+                            # Collect its function-call schema
                             self.function_configs.append(tool_instance.function_config)
 
-                            logger.info(f"已加载工具: {tool_name}")
+                            logger.info(f"Loaded tool: {tool_name}")
                 except Exception as e:
-                    logger.warning(f"加载工具{module_name}失败: {str(e)}")
+                    logger.warning(f"Failed to load tool module {module_name}: {str(e)}")
 
     def solve(self, problem_class: str, solution_plan: str) -> str:
         """
-        主解题函数 - 采用逐步执行方式
-        :param problem_class: 题目类别（Web/Crypto/Reverse等）
-        :param solution_plan: 解题思路
-        :return: 获取的flag
+        Main solving loop that executes step-by-step.
+        :param problem_class: Challenge category (Web/Crypto/Reverse/etc.).
+        :param solution_plan: Solving strategy provided by the analyzer.
+        :return: The confirmed flag, or a status string if unsuccessful.
         """
         step_count = 0
 
         while True:
             step_count += 1
-            print(f"\n正在思考第 {step_count} 步...")
+            print(f"\nThinking through step {step_count}...")
 
-            # 生成下一步执行命令
+            # Generate the next action
             next_step = None
             while next_step is None:
                 next_step = self.generate_next_step(problem_class, solution_plan)
                 if next_step:
                     break
-                print("生成执行内容失败，10秒后重试...")
+                print("Failed to generate an action. Retrying in 10 seconds...")
                 time.sleep(10)
 
-            # 提取工具名称和参数
+            # Extract the tool name and arguments
             tool_name = next_step.get("tool_name")
             arguments: dict = next_step.get("arguments", {})
             content = arguments.get("content", "")
 
-            # 手动模式：需要用户批准命令
+            # Manual mode: request confirmation before running the command
             if not self.auto_mode:
                 approved, next_step = self.manual_approval_step(next_step)
                 if not approved:
-                    print("用户终止解题")
-                    return "解题终止"
-                # 更新参数
+                    print("Challenge solving aborted by the user.")
+                    return "Solving aborted"
+                # Refresh values in case the user requested a revision
                 tool_name = next_step.get("tool_name")
                 arguments = next_step.get("arguments", {})
                 content = arguments.get("content", "")
 
-            # 执行命令
+            # Execute the command
             output = ""
             if tool_name in self.tools:
                 try:
@@ -162,72 +160,73 @@ class SolveAgent:
                     stdout, stderr = result
                     output = stdout + stderr
                 except Exception as e:
-                    output = f"工具执行出错: {str(e)}"
+                    output = f"Tool execution error: {str(e)}"
             else:
-                output = f"错误: 未找到工具 '{tool_name}'"
+                output = f"Error: tool '{tool_name}' was not found"
 
-            logger.info(f"命令输出:\n{output}")
+            logger.info(f"Command output:\n{output}")
 
-            # 使用LLM分析输出
+            # Analyse the output with the LLM
             analysis_result = self.analyzer.analyze_step_output(
                 self.memory, step_count, content, output, solution_plan
             )
 
-            # 检查LLM是否在输出中发现了flag
+            # Check whether the LLM detected a flag
             if analysis_result.get("flag_found", False):
                 flag_candidate = analysis_result.get("flag", "")
-                logger.info(f"LLM报告发现flag: {flag_candidate}")
+                logger.info(f"LLM reported a potential flag: {flag_candidate}")
 
-                # 使用回调函数确认flag
+                # Confirm the flag through the callback
                 if self.confirm_flag_callback and self.confirm_flag_callback(
                     flag_candidate
                 ):
                     return flag_candidate
                 else:
-                    logger.info("用户确认flag不正确，继续解题")
+                    logger.info("Flag rejected by the user. Continuing...")
 
-            # 添加执行历史到记忆系统
+            # Store the step in memory
             self.memory.add_step(
                 {
                     "step": step_count,
-                    "purpose": arguments.get("purpose", "未指定目的"),
+                    "purpose": arguments.get("purpose", "unspecified"),
                     "content": content,
                     "output": output,
                     "analysis": analysis_result,
                 }
             )
 
-            # 检查是否应该提前终止
+            # Respect early termination advice
             if analysis_result.get("terminate", False):
-                print("LLM建议提前终止解题")
-                return "未找到flag：提前终止"
+                print("LLM advised stopping early.")
+                return "Flag not found: terminated early"
 
     def manual_approval_step(self, next_step: Dict) -> Tuple[bool, Optional[Dict]]:
-        """手动模式：让用户无限次反馈/重思，直到 ta 主动选 1 或 3"""
+        """Manual mode: gather feedback until the user approves or aborts."""
         while True:
             arguments: dict = next_step.get("arguments", {})
-            purpose = arguments.get("purpose", "未指定目的")
+            purpose = arguments.get("purpose", "unspecified")
 
-            print("1. 批准并执行")
-            print("2. 提供反馈并重新思考")
-            print("3. 终止解题")
-            choice = input("请输入选项编号: ").strip()
+            print("1. Approve and execute")
+            print("2. Provide feedback and rethink")
+            print("3. Abort solving")
+            choice = input("Enter the option number: ").strip()
 
             if choice == "1":
                 return True, next_step
             elif choice == "2":
-                feedback = input("请提供改进建议: ").strip()
+                feedback = input("Enter your feedback or suggested changes: ").strip()
                 next_step = self.reflection(purpose, feedback)
                 if not next_step:
-                    print("（思考失败，可继续反馈或选 3 终止）")
+                    print("(Generation failed. Provide more feedback or choose option 3 to abort.)")
             elif choice == "3":
                 return False, None
             else:
-                print("无效选项，请重新选择")
+                print("Invalid option, please try again.")
 
     def reflection(self, purpose: str, feedback: str) -> Dict:
         """
-        根据用户反馈重新生成命令，返回的是“LLM 重新思考后的 next_step”，后续仍需让用户再次确认。
+        Regenerate a command based on user feedback.
+        Returns the revised next_step for further confirmation.
         """
         history_summary = self.memory.get_summary()
 
@@ -249,25 +248,25 @@ class SolveAgent:
             tool_choice="auto",
         )
 
-        # 可能解析失败，返回 None 让外层感知
+        # Parsing might fail; propagate None so callers can react
         return self.parse_tool_response(response)
 
     def generate_next_step(self, problem_class: str, solution_plan: str) -> Dict:
         """
-        生成下一步执行命令
-        :param problem_class: 题目类别
-        :param solution_plan: 解题思路
-        :return: 下一步命令字典
+        Ask the LLM for the next action.
+        :param problem_class: Challenge category.
+        :param solution_plan: Current solution plan.
+        :return: A dictionary containing the tool name and arguments.
         """
-        # 获取记忆摘要
+        # Summarise the memory for context
         history_summary = self.memory.get_summary()
 
-        # 根据题目类别选择不同的prompt模板
+        # Choose the appropriate prompt template for the category
         prompt_key = problem_class.lower() + "_next"
         if prompt_key not in self.prompt:
             prompt_key = "general_next"
 
-        # 使用Jinja2渲染提示
+        # Render the prompt
         template = self.env.from_string(self.prompt.get(prompt_key, ""))
         prompt = template.render(
             question=self.problem,
@@ -276,7 +275,7 @@ class SolveAgent:
             tools=self.tools.values(),
         )
 
-        # 调用LLM生成下一步动作
+        # Request the next action from the LLM
         response = litellm.completion(
             model=self.llm_config["model"],
             api_key=self.llm_config["api_key"],
@@ -286,14 +285,14 @@ class SolveAgent:
             tool_choice="auto",
         )
 
-        # 解析工具调用响应
+        # Interpret the tool-call response
         return self.parse_tool_response(response)
 
     def parse_tool_response(self, response: ModelResponse) -> Dict:
-        """统一解析工具调用响应，处理两种格式的响应"""
+        """Normalise tool-call responses returned by the LLM."""
         message = response.choices[0].message
 
-        # 情况1：直接工具调用格式（tool_calls）
+        # Case 1: tool_calls field populated directly
         if hasattr(message, "tool_calls") and message.tool_calls:
             tool_call = message.tool_calls[0]
             func_name = tool_call.function.name
@@ -302,31 +301,31 @@ class SolveAgent:
             except json.JSONDecodeError as e:
                 args = utils.fix_json_with_llm(tool_call.function.arguments, e)
 
-            # 确保参数中包含purpose和content
-            args.setdefault("purpose", "执行操作")
+            # Ensure purpose and content are available
+            args.setdefault("purpose", "Execute action")
             args.setdefault("content", "")
 
-        # 情况2：JSON字符串格式
+        # Case 2: message content is a JSON string
         else:
             content = message.content.strip()
-            # 尝试直接解析JSON
+            # Attempt to parse JSON directly
             try:
                 data = json.loads(content)
             except json.JSONDecodeError as e:
-                print("无法解析工具调用响应，尝试修复")
+                print("Unable to parse tool-call response, attempting repair...")
                 content = utils.fix_json_with_llm(content, e)
                 data = json.loads(content)
             except Exception as e:
-                print(f"无法解析工具调用响应：{e}")
+                print(f"Failed to parse tool-call response: {e}")
                 return {}
             if "tool_calls" in data and data["tool_calls"]:
-                    tool_call: dict = data["tool_calls"][0]
-                    func_name: dict = tool_call.get("name", "工具解析失败")
-                    args: dict = tool_call.get("arguments", {})
-                    args.setdefault("purpose", "执行操作")
-                    args.setdefault("content", "")
+                tool_call: dict = data["tool_calls"][0]
+                func_name: dict = tool_call.get("name", "tool_parse_failed")
+                args: dict = tool_call.get("arguments", {})
+                args.setdefault("purpose", "Execute action")
+                args.setdefault("content", "")
 
-        logger.info(f"使用工具: {func_name}")
-        logger.info(f"命令目的: {args['purpose']}")
-        logger.info(f"执行命令:\n{args['content']}")
+        logger.info(f"Tool selected: {func_name}")
+        logger.info(f"Purpose: {args['purpose']}")
+        logger.info(f"Command:\n{args['content']}")
         return {"tool_name": func_name, "arguments": args}

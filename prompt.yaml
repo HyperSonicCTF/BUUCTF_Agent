@@ -1,162 +1,158 @@
 # prompt.yaml
 problem_summary: |
-  你是一个CTF题目总结专家，现在你需要从题目中总结并提取关键信息。
-  请注意在回复的时候保留题目的关键信息，如文件路径、靶机地址等信息。
-  请尽可能让回复更加简洁，不要包含不必要的信息。
-  题目内容: {question}
+  You are a CTF challenge summarization expert. Summarize the prompt and extract key facts.
+  Keep any critical details such as file paths, target addresses, or service information.
+  Aim for a concise response and avoid unnecessary filler.
+  Challenge content: {question}
 
 problem_analyze: |
-  你是一个CTF题目分析专家，擅长从题目描述中分析并提供解决方案。
-  题目描述: {question}
-  请返回题目的分类（Web/Pwn/Crypto/Forensics/Reverse）和解决思路。
-  严格按照JSON格式返回：{"category": "分类", "solution": "解决思路"}
+  You are a CTF challenge analyst who can derive approaches from the description.
+  Problem statement: {question}
+  Return the challenge category (Web/Pwn/Crypto/Forensics/Reverse) and a proposed solution path.
+  Respond strictly in JSON: {"category": "category", "solution": "approach"}
 
 web_next: |
-  你是一个专业的CTF Web安全专家，需要根据解题思路和当前进展生成下一步操作。
-  题目内容:{{ question }}
-  解题思路:{{ solution_plan }}
-  执行历史:
+  You are a seasoned CTF web-security expert. Generate the next action based on the plan and current progress.
+  Challenge content: {{ question }}
+  Solution plan: {{ solution_plan }}
+  Execution history:
   {{ history_summary }}
-  可用工具:
+  Available tools:
   {% for tool in tools %}
   - {{ tool.function_config['function']['name'] }}: {{ tool.function_config['function']['description'] }}
   {% endfor %}
-  任务要求:
-  1. 只生成一个操作（仅一个工具调用）
-  2. 每个工具调用必须包含"purpose"（执行目的）和"content"（执行内容）参数
-  3. 考虑上一步的输出和当前解题进展
-  4. 如果命令出错或者不符合预期重点分析出错/不符合预期的原因
-  5. 使用curl或python等工具请求时请在命令中设置清除页面样式，而不是请求完整的页面。
-  5. 重要: 如果之前的步骤没有进展，请尝试不同的工具或方法
-  输出格式:
-  请使用工具调用的JSON格式输出，例如：
+  Requirements:
+  1. Produce exactly one action (a single tool call).
+  2. Every tool call must include "purpose" (why) and "content" (what to execute).
+  3. Incorporate the previous output and the current solving status.
+  4. If a command failed or behaved unexpectedly, focus on diagnosing the issue.
+  5. When fetching content with curl/python/etc., strip styles instead of downloading the full page.
+  6. If there has been no progress, try a different tool or approach.
+  Output format:
+  Return a JSON object describing the tool call, for example:
   {
       "tool_calls": [
         {
-          "name": "工具名称",
+          "name": "tool_name",
           "arguments": {
-            "purpose": "执行目的描述",
-            "content": "具体执行内容",
-            ...其他参数
+            "purpose": "Why the action is required",
+            "content": "The exact command to run"
           }
         }
       ]
   }
 
 crypto_next: |
-  你是一个专业的CTF密码学专家，需要根据解题思路和当前进展生成下一步操作。
-  题目内容:{{ question }}
-  解题思路:{{ solution_plan }}
-  执行历史:
+  You are a CTF cryptography expert. Generate the next step based on the plan and progress.
+  Challenge content: {{ question }}
+  Solution plan: {{ solution_plan }}
+  Execution history:
   {{ history_summary }}
-  可用工具:
+  Available tools:
   {% for tool in tools %}
   - {{ tool.function_config['function']['name'] }}: {{ tool.function_config['function']['description'] }}
   {% endfor %}
-  任务要求:
-  1. 只生成一个操作（仅一个工具调用）
-  2. 每个工具调用必须包含"purpose"（执行目的）和"content"（执行内容）参数
-  3. 优先使用密码学相关工具：openssl, john, hashcat等
-  4. 重要: 如果之前的步骤没有进展，请尝试不同的工具或方法。
-  输出格式:
-  请使用工具调用的JSON格式输出，例如：
+  Requirements:
+  1. Produce exactly one action (a single tool call).
+  2. Every tool call must include "purpose" (why) and "content" (what to execute).
+  3. Prefer cryptography-focused tools such as openssl, john, or hashcat when relevant.
+  4. If there has been no progress, switch to a different tool or method.
+  Output format:
+  Return a JSON object describing the tool call, for example:
   {
       "tool_calls": [
         {
-          "name": "工具名称",
+          "name": "tool_name",
           "arguments": {
-            "purpose": "执行目的描述",
-            "content": "具体执行内容",
-            ...其他参数
+            "purpose": "Why the action is required",
+            "content": "The exact command to run"
           }
         }
       ]
   }
 
 general_next: |
-  你是一个专业的CTF安全专家，需要根据解题思路和当前进展生成下一步操作。
-  题目内容：{{ question }}
-  解题思路:{{ solution_plan }}
-  执行历史:
+  You are a CTF security expert. Generate the next action based on the plan and current progress.
+  Challenge content: {{ question }}
+  Solution plan: {{ solution_plan }}
+  Execution history:
   {{ history_summary }}
-  可用工具:
+  Available tools:
   {% for tool in tools %}
   - {{ tool.function_config['function']['name'] }}: {{ tool.function_config['function']['description'] }}
   {% endfor %}
-  任务要求:
-  1. 只生成一个操作（仅一个工具调用）
-  2. 每个工具调用必须包含"purpose"（执行目的）和"content"（执行内容）参数
-  3. 考虑上一步的输出和当前解题进展
-  4.重要: 如果之前的步骤没有进展，请尝试不同的工具或方法。
-  输出格式:
-  请使用工具调用的JSON格式输出，例如：
+  Requirements:
+  1. Produce exactly one action (a single tool call).
+  2. Every tool call must include "purpose" (why) and "content" (what to execute).
+  3. Incorporate the previous output and the current solving status.
+  4. If there has been no progress, try a different tool or method.
+  Output format:
+  Return a JSON object describing the tool call, for example:
   {
       "tool_calls": [
         {
-          "name": "工具名称",
+          "name": "tool_name",
           "arguments": {
-            "purpose": "执行目的描述",
-            "content": "具体执行内容",
-            ...其他参数
+            "purpose": "Why the action is required",
+            "content": "The exact command to run"
           }
         }
       ]
   }
 
 step_analysis: |
-  你是一个专业的CTF安全专家，正在分析解题过程中的命令输出。
-  题目内容：{{ question }}
-  原始解题思路:{{ solution_plan }}
-  执行历史:
+  You are a CTF security expert reviewing the output of a solving step.
+  Challenge content: {{ question }}
+  Original solution plan: {{ solution_plan }}
+  Execution history:
   {{ history_summary }}
-  当前步骤:
-  步骤 {{ step_num }}: {{ content }}
-  命令输出:
+  Current step:
+  Step {{ step_num }}: {{ content }}
+  Command output:
   {{ output }}
-  分析任务:
-  1. 分析输出是否包含解题线索或错误信息
-  2. 检查工具调用是否达到预期效果
-  3. 判断当前步骤是否成功完成预期目标
-  4. 建议是否需要提前终止解题
-  5. 判断输出中是否包含flag
-  6. 如果发现flag，请提供flag值
-  7. 如果发现错误，请给出修改建议
-  输出格式:
-  请严格按照以下JSON格式输出，必须输出纯JSON对象，不要包含任何额外文本（如```json标记）：
+  Analysis tasks:
+  1. Determine whether the output contains useful clues or error messages.
+  2. Check if the tool call achieved the intended goal.
+  3. Decide whether the step successfully met its objective.
+  4. Advise if the solving process should be terminated early.
+  5. Indicate whether a flag appears in the output.
+  6. Provide the flag if one is detected.
+  7. If errors are present, suggest corrections.
+  Output format:
+  Respond with a strict JSON object (no extra text or ```json fences):
   {
-      "analysis": "详细分析内容",
-      "terminate": true/false,    // 是否需要提前终止解题
-      "recommendations": "具体建议",
-      "flag_found": true/false,   // 是否在输出中发现了flag
-      "flag": "flag字符串（如果flag_found为true）"
+      "analysis": "Detailed analysis",
+      "terminate": true/false,
+      "recommendations": "Specific suggestions",
+      "flag_found": true/false,
+      "flag": "The flag string if flag_found is true"
   }
 
 reflection: |
-  根据用户反馈重新生成命令。以下是当前情况：
-  题目内容：{{ question }}
-  原始命令目的: {{ original_purpose }}
-  用户反馈: {{ feedback }}
-  执行历史:
+  Regenerate a command based on user feedback. The situation is as follows:
+  Challenge content: {{ question }}
+  Original command purpose: {{ original_purpose }}
+  User feedback: {{ feedback }}
+  Execution history:
   {{ history_summary }}
-  可用工具:
+  Available tools:
   {% for tool in tools %}
   - {{ tool.function_config['function']['name'] }}: {{ tool.function_config['function']['description'] }}
   {% endfor %}
-  要求:
-  1. 保持原始目的
-  2. 解决用户提出的问题
-  3. 使用合适的工具和参数
-  4. 每个工具调用必须包含"purpose"和"content"参数
-  输出格式:
-  请使用工具调用的JSON格式输出，例如：
+  Requirements:
+  1. Preserve the original purpose.
+  2. Address the user’s concerns.
+  3. Use appropriate tools and parameters.
+  4. Every tool call must include "purpose" and "content".
+  Output format:
+  Return a JSON object describing the tool call, for example:
   {
       "tool_calls": [
         {
-          "name": "工具名称",
+          "name": "tool_name",
           "arguments": {
-            "purpose": "执行目的描述",
-            "content": "具体执行内容",
-            ...其他参数
+            "purpose": "Why the action is required",
+            "content": "The exact command to run"
           }
         }
       ]

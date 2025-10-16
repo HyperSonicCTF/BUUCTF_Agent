@@ -14,45 +14,45 @@ class Workflow:
         self.processor_llm: dict = self.config["llm"]["pre_processor"]
         self.prompt: dict = yaml.safe_load(open("./prompt.yaml", "r", encoding="utf-8"))
         if self.config is None:
-            raise ValueError("配置文件不存在")
+            raise ValueError("Configuration file is missing")
 
     def solve(self, problem: str) -> str:
         problem = self.summary_problem(problem)
-        #  分析题目
+        # Analyse the challenge
         analyzer = Analyzer(self.config, problem)
         analysis_result = analyzer.problem_analyze()
         logger.info(
-            f"题目分类：{analysis_result['category']}\n分析结果：{analysis_result['solution']}"
+            f"Challenge category: {analysis_result['category']}\nPlan: {analysis_result['solution']}"
         )
 
-        # 创建SolveAgent实例并设置flag确认回调
+        # Create the SolveAgent and attach the flag confirmation callback
         agent = SolveAgent(self.config, problem)
         agent.confirm_flag_callback = self.confirm_flag
 
-        # 将分类和解决思路传递给SolveAgent
+        # Pass the category and solution plan to the agent
         return agent.solve(analysis_result["category"], analysis_result["solution"])
 
     def confirm_flag(self, flag_candidate: str) -> bool:
         """
-        让用户确认flag是否正确
-        :param flag_candidate: 候选flag
-        :return: 用户确认结果
+        Ask the user to confirm whether the candidate flag is correct.
+        :param flag_candidate: Candidate flag string.
+        :return: True if the user confirms the flag, otherwise False.
         """
-        print(f"\n发现flag：\n{flag_candidate}")
-        print("请确认这个flag是否正确？")
+        print(f"\nPossible flag detected:\n{flag_candidate}")
+        print("Please confirm whether this flag is correct.")
 
         while True:
-            response = input("输入 'y' 确认正确，输入 'n' 表示不正确: ").strip().lower()
+            response = input("Enter 'y' to accept, or 'n' if it is incorrect: ").strip().lower()
             if response == "y":
                 return True
             elif response == "n":
                 return False
             else:
-                print("无效输入，请输入 'y' 或 'n'")
+                print("Invalid input. Please respond with 'y' or 'n'.")
 
     def summary_problem(self, problem: str) -> str:
         """
-        总结题目
+        Summarise the challenge to shorten long prompts.
         """
         if len(problem) < 128:
             return problem

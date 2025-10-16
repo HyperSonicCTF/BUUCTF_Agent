@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class PythonTool(BaseTool):
     def __init__(self):
-        # 在初始化时询问是否要远程执行
+        # Ask whether the user wants to execute code remotely
         self.remote = self.ask_remote_execution()
         if self.remote:
             ssh_config: dict = Config.get_tool_config("ssh_shell")
@@ -26,16 +26,16 @@ class PythonTool(BaseTool):
             self._connect()
 
     def ask_remote_execution(self) -> bool:
-        """询问用户是否要远程执行"""
-        print("\n--- Python 执行选项 ---")
-        print("1. 本地执行")
-        print("2. 远程执行")
-        choice = input("请选择 Python 代码的执行方式 (1/2): ").strip()
+        """Prompt the user to decide whether to run code remotely."""
+        print("\n--- Python execution options ---")
+        print("1. Run locally")
+        print("2. Run on the remote host")
+        choice = input("Choose how to execute the Python code (1/2): ").strip()
 
         return choice == "2"
 
     def execute(self, arguments: dict) -> Tuple[str, str]:
-        """执行Python代码"""
+        """Execute Python code."""
         content = arguments.get("content", "")
 
         if self.remote:
@@ -59,7 +59,7 @@ class PythonTool(BaseTool):
     def _execute_remotely(self, content: str) -> Tuple[str, str]:
         temp_name = f"py_script_{int(time.time())}.py"
 
-        # 修复：使用字典参数调用execute方法
+        # Upload the script and execute it remotely
         upload_cmd = f"cat > {temp_name} << 'EOF'\n{content}\nEOF"
         self._shell_execute({"content": upload_cmd})
         stdout, stderr = self._shell_execute({"content": f"python3 {temp_name}"})
@@ -68,7 +68,7 @@ class PythonTool(BaseTool):
         return stdout, stderr
 
     def _is_connected(self):
-        """检查连接是否有效"""
+        """Verify that the SSH connection is still alive."""
         if not self.ssh_client:
             return False
         try:
@@ -78,7 +78,7 @@ class PythonTool(BaseTool):
             return False
 
     def _connect(self):
-        """建立SSH连接或重连"""
+        """Establish or refresh the SSH connection."""
         try:
             if self.ssh_client:
                 self.ssh_client.close()
@@ -92,30 +92,30 @@ class PythonTool(BaseTool):
                 timeout=10,
             )
             self.ssh_client = client
-            logger.info(f"SSH连接成功: {self.username}@{self.hostname}:{self.port}")
+            logger.info(f"SSH connection established: {self.username}@{self.hostname}:{self.port}")
         except Exception as e:
-            logger.error(f"SSH连接失败: {str(e)}")
-            raise ConnectionError(f"SSH连接失败: {str(e)}")
+            logger.error(f"Failed to connect over SSH: {str(e)}")
+            raise ConnectionError(f"Failed to connect over SSH: {str(e)}")
 
     def _shell_execute(self, arguments: dict):
-        # 检查连接状态，自动重连
+        # Check the connection and reconnect if necessary
         if not self._is_connected():
-            logger.warning("SSH会话断开，尝试重新连接...")
+            logger.warning("SSH session dropped, attempting to reconnect...")
             self._connect()
 
-        # 从参数中提取命令内容
+        # Extract the command from the arguments
         command = arguments.get("content", "")
         if not command:
-            return "", "错误：未提供命令内容"
+            return "", "Error: no command content provided"
 
         try:
             _, stdout, stderr = self.ssh_client.exec_command(command)
 
-            # 读取输出
+            # Read output
             stdout_bytes = stdout.read()
             stderr_bytes = stderr.read()
 
-            # 安全解码
+            # Decode safely
             def safe_decode(data: bytes) -> str:
                 try:
                     return data.decode("utf-8")
@@ -125,8 +125,8 @@ class PythonTool(BaseTool):
             return safe_decode(stdout_bytes), safe_decode(stderr_bytes)
 
         except Exception as e:
-            logger.error(f"命令执行失败: {str(e)}")
-            return "", f"命令执行错误: {str(e)}"
+            logger.error(f"Command execution failed: {str(e)}")
+            return "", f"Command execution error: {str(e)}"
 
     @property
     def function_config(self) -> Dict:
@@ -134,17 +134,17 @@ class PythonTool(BaseTool):
             "type": "function",
             "function": {
                 "name": "execute_python_code",
-                "description": "执行Python代码片段",
+                "description": "Execute a Python code snippet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "purpose": {
                             "type": "string",
-                            "description": "执行此步骤的目的",
+                            "description": "Explain why this step is required.",
                         },
                         "content": {
                             "type": "string",
-                            "description": "要执行的Python代码",
+                            "description": "The Python code to execute.",
                         },
                     },
                     "required": ["purpose", "content"],

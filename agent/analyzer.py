@@ -46,17 +46,17 @@ class Analyzer:
         solution_plan: str,
     ) -> Dict:
         """
-        使用LLM分析步骤输出
-        :param step_num: 步骤编号
-        :param content: 执行的内容
-        :param output: 命令输出
-        :param solution_plan: 解题思路
-        :return: 分析结果字典
+        Analyse the output of a solving step with the LLM.
+        :param step_num: Step number.
+        :param content: Executed content (e.g., command).
+        :param output: Command output.
+        :param solution_plan: Current solution plan.
+        :return: Analysis dictionary.
         """
-        # 获取记忆摘要
+        # Summarise historical context
         history_summary = memory.get_summary()
 
-        # 使用Jinja2渲染提示
+        # Render the prompt with Jinja2
         template = self.env.from_string(self.prompt.get("step_analysis", ""))
         prompt = template.render(
             question=self.problem,
@@ -67,14 +67,14 @@ class Analyzer:
             history_summary=history_summary,
         )
 
-        # 调用LLM进行分析
+        # Query the LLM for the analysis
         response = litellm.completion(
             model=self.llm_config["model"],
             api_key=self.llm_config["api_key"],
             api_base=self.llm_config["api_base"],
             messages=[{"role": "user", "content": optimize_text(prompt)}],
         )
-        # 解析分析结果
+        # Parse and return the analysis result
         try:
             result = json.loads(response.choices[0].message.content)
             if isinstance(result, dict):

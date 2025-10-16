@@ -7,16 +7,16 @@ import logging
 
 
 def setup_logging():
-    """配置日志系统"""
-    # 创建日志目录
+    """Configure the logging system."""
+    # Create the log directory
     log_dir = "logs"
     os.makedirs(log_dir, exist_ok=True)
     
-    # 生成带时间戳的日志文件名
+    # Generate a timestamped log filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = os.path.join(log_dir, f"log_{timestamp}.log")
     
-    # 配置日志
+    # Configure logging
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -26,7 +26,7 @@ def setup_logging():
         ]
     )
     
-    # 设置文件日志级别为DEBUG，控制台日志级别为INFO
+    # Set file logging level to DEBUG and console level to INFO
     file_handler = logging.FileHandler(log_file,encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -35,7 +35,7 @@ def setup_logging():
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     
-    # 清除所有基本配置的handler，添加自定义handler
+    # Remove default handlers and attach the custom ones
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
@@ -43,7 +43,7 @@ def setup_logging():
     root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
     
-    # 设置第三方库的日志级别
+    # Tweak third-party logger levels
     logging.getLogger("LiteLLM").setLevel(logging.WARNING)
     logging.getLogger("paramiko").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -53,10 +53,10 @@ if __name__ == "__main__":
     setup_logging()
     logger = logging.getLogger(__name__)
     config: dict = Config.load_config()
-    print("如题目中含有附件，请放附件文件到项目根目录的attachments文件夹下")
-    print("请在此输入题目标题和内容，支持多行输入")
-    print("输入完成后回车按 Ctrl+D 或 Ctrl+Z 再回车以结束：")
+    print("If the challenge includes attachments, place them in the project root under the attachments directory.")
+    print("Please enter the challenge title and description. Multi-line input is supported.")
+    print("Press Enter, then finish with Ctrl+D (or Ctrl+Z followed by Enter on Windows).")
     question = sys.stdin.read().strip()
-    logger.debug(f"题目内容：{question}")
+    logger.debug(f"Challenge content: {question}")
     result = Workflow(config=config).solve(question)
-    logger.info(f"最终结果:{result}")
+    logger.info(f"Final result: {result}")

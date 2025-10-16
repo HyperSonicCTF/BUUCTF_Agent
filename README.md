@@ -1,43 +1,43 @@
 # BUUCTF_Agent
 ![image](https://github.com/MuWinds/BUUCTF_Agent/blob/main/1.png)
-## 背景
+## Background
 
-起源于[@MuWinds](https://github.com/MuWinds)闲来无事，所以打算写个Ai Agent练手
+The project started when [@MuWinds](https://github.com/MuWinds) decided to build an AI agent for fun and practice.
 
-项目并不打算局限于[BUUCTF](https://buuoj.cn)，所以现在是手动输入题面的（更主要是我懒）。
+The agent is not intended to stay limited to [BUUCTF](https://buuoj.cn), so the challenge descriptions are currently provided manually (mostly because of laziness).
 
-愿景：成为各路CTF大手子的好伙伴，当然如果Agent能独当一面的话那最好不过~
+Vision: become the trusted teammate of every CTF player—and if the agent can eventually solve challenges on its own, even better.
 
-## 功能
+## Features
 
-1. 支持全自动解题，包括题目分析，靶机探索，代码执行，flag分析全流程
-2. 支持命令行交互式解题
-3. 目前项目内置支持Python工具和SSH到装好环境的Linux机器进行解题
-4. 可扩展的CTF工具框架
-5. 可自定义的Prompt和模型文件
+1. End-to-end automated solving, including problem analysis, target exploration, code execution, and flag extraction.
+2. Interactive solving flow in the command line.
+3. Built-in tooling to run Python locally or over SSH on a prepared Linux host.
+4. Extensible framework for adding CTF tools.
+5. Customisable prompts and model configurations.
 
-## 部署与运行
+## Deployment & Usage
 
-1. 克隆仓库
+1. Clone the repository
 ```
 git clone https://github.com/MuWinds/BUUCTF_Agent.git
 ```
-2. 安装依赖
+2. Install dependencies
 ```
 pip install -r .\requirements.txt
 ```
-3. Docker容器配置（可选）：这一步是配置Agent的执行环境，可以自己配虚拟机也可以用仓库里现成的Dockerfile，如果用docker的方式配置请提前安装好Docker   
-   (1)先制作镜像:
+3. (Optional) Configure a Docker container. This sets up the execution environment for the agent. You can prepare your own virtual machine, or use the provided Dockerfile—just make sure Docker is installed first.  
+   (1) Build the image:
    ```bash
    docker build -t ctf_agent .
    ```
-   (2)再运行镜像，将镜像内ssh所用的22端口映射到宿主机的2201端口：
+   (2) Run the image and map the container’s SSH port 22 to port 2201 on the host:
    ```bash
    docker run -itd -p 2201:22 ctf_agent
    ```
-   如果用仓库里Dockerfile去创建Docker容器，SSH用户为root，密码为ctfagent。
-4. 修改配置文件：config.json，修改工具的配置文件
-   下面是是硅基流动API（OpenAI兼容模式的配置示例：）
+   If you create the container by using the Dockerfile in this repository, the SSH user is `root` and the password is `ctfagent`.
+4. Update the configuration file `config.json` with your tooling preferences.  
+   Below is an example that uses the SiliconFlow API (OpenAI-compatible mode):
    ```json
     {
         "llm":{
@@ -73,47 +73,47 @@ pip install -r .\requirements.txt
         }
     }
    ```
-   在llm部分中，analyzer负责的是分析部分，problem_processor负责的是问题的处理部分，solve_agent则负责步骤执行的部分，这里推荐analyzer采用思维链的推理模型以提升对问题的思考能力，而pre_processor是对文字做预处理，采用参数量相对不大的小模型以节省费用。
+   In the `llm` section, `analyzer` handles reasoning about outputs, `solve_agent` executes the solving steps, and `pre_processor` performs lightweight text pre-processing—use a small, cost-effective model here. A chain-of-thought style model is recommended for `analyzer` to improve the quality of reasoning.
    
-   本项目目前**仅兼容OpenAI API类型的大模型**
-5. 运行：
+   The project currently **only supports OpenAI-compatible APIs**.
+5. Run the agent:
 ```
 python .\main.py
 ```
 
 
-## 目前计划
-- ~~允许用户本地环境运行Python代码~~（已完成）
-- 支持更多工具，比如二进制分析等，不局限于Web题和Web相关的密码学之类的
-- 提供更美观的界面，比如Web前端或者Qt界面
-- RAG知识库
-- ~~将不同工具的LLM进行区分，或者按照思考推理与代码指令编写两种任务分派到不同的LLM~~（已完成）
-- 更好的MCP支持
-- 实现不同OJ平台的自动化，提供手动输入题面之外更便捷的选择
-- ~~支持附件输入~~已实现，需要在项目根目录的attachments目录下放入附件
+## Roadmap
+- ~~Allow running Python code in the local environment~~ (done)
+- Support more tooling, e.g. binary analysis, beyond web and crypto challenges
+- Provide a polished interface such as a web front-end or Qt desktop GUI
+- Add a RAG knowledge base
+- ~~Use different LLMs for different tools or tasks (reasoning vs. code generation)~~ (done)
+- Improve MCP support
+- Automate interactions with additional online judges so challenge text does not need to be entered manually
+- ~~Support attachments~~ done—place files in the project root under `attachments`
 
-## 工具开发
-**目前项目已经内置支持Python工具和SSH到装好环境的Linux机器进行解题**，如果还需要开发自己顺手的工具可以看这里
+## Tool Development
+**Python execution and SSH access to a prepared Linux box are available out of the box.** If you want to add your own tooling, start here.
 
-在项目的ctf_tool文件夹下，有base_tool.py:
+Inside the `ctf_tool` directory you will find `base_tool.py`:
 ```python
 class BaseTool(ABC):
     @abstractmethod
     def execute(self, *args, **kwargs) -> Tuple[str, str]:
-        """执行工具操作"""
+        """Run the tool and return stdout/stderr."""
         pass
     
     @property
     @abstractmethod
     def function_config(self) -> Dict:
-        """返回工具的函数调用配置"""
+        """Describe the function-call schema exposed to the agent."""
         pass
 ```
-提供了抽象方法实例，其中必须包含`execute`和`function_config`这两个方法。
+Every custom tool must implement `execute` and `function_config`.
 
-* `execute`方法是提供直接执行的操作，返回的是执行的结果，为元组类型，元组的两个元素一个是正常输出，一个是报错输出，对顺序没有要求。
+* `execute` performs the actual action and returns a tuple of `(stdout, stderr)`; the order is flexible, but both values should be provided.
 
-* `function_config`方法是提供function call的配置通过Agent传给大语言模型，方便大语言模型决定什么情况下调用这个工具，该方法必须添加`@property`注解，且返回的格式相对固定，下面是一个远程执行shell的示例：
+* `function_config` exposes the tool through function calling so the agent can discover when to use it. The method must be decorated with `@property`, and the returned structure follows a consistent schema. Example for a remote shell:
 ```python
 @property
 def function_config(self) -> Dict:
@@ -121,28 +121,29 @@ def function_config(self) -> Dict:
         "type": "function",
         "function": {
             "name": "execute_shell_command",
-            "description": "在远程服务器上执行Shell命令，服务器内提供了curl,sqlmap,nmap,openssl等常用工具",
+            "description": "Run a shell command on the remote server. curl, sqlmap, nmap, openssl, and other common tools are available.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "purpose": {
                         "type": "string",
-                        "description": "执行此步骤的目的"
+                        "description": "Why this step is being executed."
                     },
                     "content": {
                         "type": "string",
-                        "description": "要执行的shell命令"
+                        "description": "The shell command to run."
                     },
+                },
                 "required": ["purpose", "content"]
-                }
             }
         }
     }
+}
 ```
 
 ## Attention
-既然有shell代码的执行，**请不要作死拿自己存着重要数据的机器让Agent执行代码**，我不确保大语言模型一定不会输出诸如`rm -rf /*`这种奇怪东西，因为这种操作出现的各种问题请自行认命，项目仓库给了对应的Dockerfile方便各位拿来就用。
+Because the agent can execute shell commands, **do not let it run on a machine that stores important data**. There is no guarantee that an LLM will not suggest something destructive like `rm -rf /*`. Use a disposable environment or the provided Dockerfile to stay safe.
 
-QQ群：
+QQ group:
 
 ![image](https://github.com/MuWinds/BUUCTF_Agent/blob/main/qq_group.jpg)
